@@ -1,0 +1,42 @@
+{
+  "alpaca": {
+    "endpoint":    "https://paper-api.alpaca.markets/v2",
+    "api_key":     "METTRE_NOUVELLE_API_KEY_ICI",
+    "api_secret":  "METTRE_NOUVEAU_SECRET_ICI",
+    "mode":        "paper"
+  },
+  "webhook_token": "luxalgo_secret_2026",
+
+  "money_management_default": {
+    "take_profit_pct":        0.015,
+    "trailing_sl_pct":        0.002,
+    "trail_step_pct":         0.0015,
+    "profit_trigger_pct":     0.001,
+    "default_win_rate":       0.65,
+    "default_win_loss_ratio": 3.0,
+    "note": "Paramètres défaut LuxAlgo SMC — WR cible 65%"
+  },
+  "money_management_BTCUSD": {
+    "take_profit_pct":        0.005,
+    "trailing_sl_pct":        0.003,
+    "trail_step_pct":         0.0015,
+    "profit_trigger_pct":     0.003,
+    "default_win_rate":       0.65,
+    "default_win_loss_ratio": 2.0,
+    "note": "BTC — TP=0.50% SL=0.30% Trig=0.30%"
+  },
+  "money_management_ETHUSD": {
+    "take_profit_pct":        0.015,
+    "trailing_sl_pct":        0.0015,
+    "trail_step_pct":         0.0015,
+    "profit_trigger_pct":     0.001,
+    "default_win_rate":       0.65,
+    "default_win_loss_ratio": 5.0,
+    "note": "ETH — TP=1.50% SL=0.15% Trig=0.10%"
+  },
+  "sessions": {
+    "block_asian_session": true,
+    "asian_start":         "23:00",
+    "asian_end":           "08:00"
+  }
+}
