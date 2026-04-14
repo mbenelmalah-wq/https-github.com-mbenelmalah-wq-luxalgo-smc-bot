@@ -21,8 +21,12 @@
 - **Filtre** : Session asiatique bloquée (23:00-08:00 UTC)
 - **MM** : paramètres par symbole (BTCUSD/ETHUSD séparés)
 
-## 🔑 COMPTES
+## 🔑 COMPTES & URLS — NE PAS MÉLANGER
 
-- Alpaca Paper : compte LuxAlgo (séparé du principal)
-- Railway : web-production-b2c39d.up.railway.app
-- GitHub : https://github.com/mbenelmalah-wq/https-github.com-mbenelmalah-wq-luxalgo-smc-bot
+| Bot | Railway URL | Token TradingView | Alpaca |
+|-----|-------------|-------------------|--------|
+| SPLV3 principal | `alpaca-trading-bot-production-f693.up.railway.app/webhook` | `splv3_secret_2026` | Compte principal |
+| LuxAlgo SMC | `web-production-b2c39d.up.railway.app/webhook` | `luxalgo_secret_2026` | Compte secondaire |
+
+- GitHub LuxAlgo : https://github.com/mbenelmalah-wq/https-github.com-mbenelmalah-wq-luxalgo-smc-bot
+- Railway projet : incredible-healing
