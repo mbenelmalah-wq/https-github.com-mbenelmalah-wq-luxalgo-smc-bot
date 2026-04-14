@@ -134,16 +134,26 @@ def webhook():
         log.info("Session asiatique — signal ignoré")
         return jsonify({"status": "asian_session_blocked"})
 
-    # Crypto : pas de short
+    # SELL = fermeture position existante uniquement (pas de short)
     if side == "sell":
-        positions = get_positions()
-        has_pos = any(p.get("symbol") == symbol for p in (positions if isinstance(positions, list) else []))
-        if not has_pos:
-            log.info(f"SELL ignoré — pas de position {symbol}")
-            return jsonify({"status": "no_position_to_sell"})
+        if symbol not in active_trails:
+            log.info(f"SELL ignoré — pas de position active {symbol}")
+            return jsonify({"status": "no_position_to_close"})
+        trail = active_trails.pop(symbol)
+        api_call("DELETE", f"/positions/{symbol}")
+        prix_exit = get_prix(symbol) or trail.entry
+        pnl = round((prix_exit - trail.entry) / trail.entry * trail.mise, 2)
+        for t in reversed(trades_history):
+            if t["symbol"] == symbol and "exit" not in t:
+                t["exit"] = prix_exit
+                t["reason"] = f"Signal {signal}"
+                t["pnl"] = pnl
+                break
+        log.info(f"  Position {symbol} fermée @ {prix_exit:.2f} | P&L ${pnl}")
+        return jsonify({"status": "closed", "symbol": symbol, "pnl": pnl})
 
-    # Déjà en position ?
-    if symbol in active_trails and side == "buy":
+    # BUY — déjà en position ?
+    if symbol in active_trails:
         log.info(f"Déjà en position {symbol}")
         return jsonify({"status": "already_in_position"})
 
@@ -155,18 +165,18 @@ def webhook():
     mise    = half_kelly(capital, mm["default_win_rate"], mm["default_win_loss_ratio"])
     mm["mise"] = mise
 
-    log.info(f"  {side.upper()} {symbol} | source={source} | signal={signal} | mise=${mise:.0f}")
+    log.info(f"  BUY {symbol} | source={source} | signal={signal} | mise=${mise:.0f}")
 
     # Prix actuel
     prix = get_prix(symbol)
     if not prix:
         return jsonify({"error": "prix indisponible"}), 500
 
-    # Ordre
+    # Ordre BUY
     qty = round(mise / prix, 6)
     ordre = api_call("POST", "/orders", {
         "symbol": symbol, "qty": str(qty),
-        "side": side, "type": "market", "time_in_force": "gtc"
+        "side": "buy", "type": "market", "time_in_force": "gtc"
     })
 
     if "error" in str(ordre).lower():
@@ -176,14 +186,14 @@ def webhook():
     log.info(f"  Ordre placé: {ordre.get('id')}")
 
     # Trailing SL
-    active_trails[symbol] = TrailSL(symbol, prix, side, mm)
+    active_trails[symbol] = TrailSL(symbol, prix, "buy", mm)
     trades_history.append({
         "time": datetime.now(timezone.utc).isoformat(),
-        "symbol": symbol, "side": side, "source": source,
+        "symbol": symbol, "side": "buy", "source": source,
         "signal": signal, "entry": prix, "mise": round(mise, 2)
     })
 
-    return jsonify({"status": "ok", "symbol": symbol, "side": side, "prix": prix, "mise": round(mise, 2)})
+    return jsonify({"status": "ok", "symbol": symbol, "side": "buy", "prix": prix, "mise": round(mise, 2)})
 
 # ── Monitor trailing SL ────────────────────────────────────────────────────────
 def monitor_loop():
