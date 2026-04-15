@@ -114,6 +114,7 @@ def is_asian_session():
 # ── Webhook principal ─────────────────────────────────────────────────────────
 @app.route("/webhook", methods=["POST"])
 def webhook():
+  try:
     data = request.get_json(silent=True) or {}
     log.info(f"Signal reçu: {data}")
 
@@ -172,14 +173,15 @@ def webhook():
     if not prix:
         return jsonify({"error": "prix indisponible"}), 500
 
-    # Ordre BUY
+    # Ordre BUY — Alpaca crypto exige format "BTC/USD"
+    alpaca_sym = symbol[:3] + "/" + symbol[3:]  # BTCUSD → BTC/USD
     qty = round(mise / prix, 6)
     ordre = api_call("POST", "/orders", {
-        "symbol": symbol, "qty": str(qty),
+        "symbol": alpaca_sym, "qty": str(qty),
         "side": "buy", "type": "market", "time_in_force": "gtc"
     })
 
-    if "error" in str(ordre).lower():
+    if ordre.get("status") in ("rejected", "canceled") or "error" in str(ordre).lower():
         log.error(f"Erreur ordre: {ordre}")
         return jsonify({"error": str(ordre)}), 500
 
@@ -194,6 +196,9 @@ def webhook():
     })
 
     return jsonify({"status": "ok", "symbol": symbol, "side": "buy", "prix": prix, "mise": round(mise, 2)})
+  except Exception as e:
+    log.error(f"Webhook erreur: {e}", exc_info=True)
+    return jsonify({"error": str(e)}), 500
 
 # ── Monitor trailing SL ────────────────────────────────────────────────────────
 def monitor_loop():
