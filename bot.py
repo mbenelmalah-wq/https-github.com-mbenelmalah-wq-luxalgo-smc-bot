@@ -52,14 +52,41 @@ def get_positions():
     return api_call("GET", "/positions")
 
 def get_prix(symbol):
-    sym = symbol.replace("USD", "/USD")
-    url = "https://data.alpaca.markets/v1beta3/crypto/us/latest/bars"
-    r = requests.get(url,
-        headers={"APCA-API-KEY-ID": API_KEY, "APCA-API-SECRET-KEY": API_SECRET},
-        params={"symbols": sym}, timeout=5)
-    data = r.json()
-    bar = data.get("bars", {}).get(sym)
-    return float(bar["c"]) if bar else None
+    sym = symbol[:3] + "/" + symbol[3:]  # BTCUSD → BTC/USD
+    # Tentative 1 : Alpaca v1beta3 latest quotes
+    try:
+        url = f"https://data.alpaca.markets/v1beta3/crypto/us/latest/quotes?symbols={sym}"
+        r = requests.get(url, headers=HEADERS, timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            q = data.get("quotes", {}).get(sym, {})
+            bp = q.get("bp", 0)
+            ap = q.get("ap", 0)
+            if bp and ap:
+                return round((bp + ap) / 2, 2)
+    except Exception as e:
+        log.warning(f"get_prix quote échoué: {e}")
+    # Tentative 2 : Alpaca v1beta3 latest bars
+    try:
+        url = f"https://data.alpaca.markets/v1beta3/crypto/us/latest/bars?symbols={sym}"
+        r = requests.get(url, headers=HEADERS, timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            bar = data.get("bars", {}).get(sym, {})
+            if bar:
+                return round(float(bar["c"]), 2)
+    except Exception as e:
+        log.warning(f"get_prix bar échoué: {e}")
+    # Tentative 3 : CoinGecko public (fallback sans auth)
+    try:
+        cg_id = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"}.get(symbol[:3])
+        if cg_id:
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={cg_id}&vs_currencies=usd"
+            r = requests.get(url, timeout=5)
+            return float(r.json()[cg_id]["usd"])
+    except Exception as e:
+        log.warning(f"get_prix CoinGecko échoué: {e}")
+    return None
 
 def half_kelly(capital, p, b):
     q = 1 - p
