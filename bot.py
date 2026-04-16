@@ -31,6 +31,34 @@ app = Flask(__name__)
 
 trades_history = []
 
+def load_history_from_alpaca():
+    """Charge l'historique depuis Alpaca au démarrage — persistant après redéploiement."""
+    try:
+        orders = api_call("GET", "/orders?status=closed&limit=100&direction=desc")
+        if not isinstance(orders, list):
+            return
+        count = 0
+        for o in orders:
+            if o.get("filled_at") and o.get("side") == "buy":
+                raw_sym = o.get("symbol", "").replace("/", "")
+                if not raw_sym.endswith("USD"):
+                    raw_sym = raw_sym + "USD"
+                entry = float(o.get("filled_avg_price") or 0)
+                qty   = float(o.get("filled_qty") or 0)
+                trades_history.append({
+                    "time":   o.get("filled_at", "")[:16].replace("T", " "),
+                    "symbol": raw_sym,
+                    "side":   "buy",
+                    "source": "ALPACA_HISTORY",
+                    "signal": "",
+                    "entry":  entry,
+                    "mise":   round(entry * qty, 2)
+                })
+                count += 1
+        log.info(f"Historique chargé : {count} trades depuis Alpaca")
+    except Exception as e:
+        log.warning(f"load_history: {e}")
+
 # ── Helpers API Alpaca ─────────────────────────────────────────────────────────
 def api_call(method, path, payload=None):
     url = BASE_URL + path
@@ -433,6 +461,7 @@ def dashboard():
 
 # ── Start ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    load_history_from_alpaca()
     import threading
     t = threading.Thread(target=monitor_loop, daemon=True)
     t.start()
