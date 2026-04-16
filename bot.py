@@ -156,23 +156,10 @@ def webhook():
         log.info("Session asiatique — signal ignoré")
         return jsonify({"status": "asian_session_blocked"})
 
-    # SELL = fermeture position existante uniquement (pas de short)
+    # SELL ignoré — sorties gérées uniquement par le Trailing SL
     if side == "sell":
-        if symbol not in active_trails:
-            log.info(f"SELL ignoré — pas de position active {symbol}")
-            return jsonify({"status": "no_position_to_close"})
-        trail = active_trails.pop(symbol)
-        api_call("DELETE", f"/positions/{symbol}")
-        prix_exit = get_prix(symbol) or trail.entry
-        pnl = round((prix_exit - trail.entry) / trail.entry * trail.mise, 2)
-        for t in reversed(trades_history):
-            if t["symbol"] == symbol and "exit" not in t:
-                t["exit"] = prix_exit
-                t["reason"] = f"Signal {signal}"
-                t["pnl"] = pnl
-                break
-        log.info(f"  Position {symbol} fermée @ {prix_exit:.2f} | P&L ${pnl}")
-        return jsonify({"status": "closed", "symbol": symbol, "pnl": pnl})
+        log.info(f"SELL ignoré ({source}/{signal}) — trailing SL gère les sorties")
+        return jsonify({"status": "sell_ignored_trailing_sl_manages_exit"})
 
     # BUY — déjà en position ?
     if symbol in active_trails:
