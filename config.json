@@ -1,8 +1,8 @@
 {
   "alpaca": {
     "endpoint":    "https://paper-api.alpaca.markets/v2",
-    "api_key":     "PK6VHMNYYGXO35AF6GODGO4SWU",
-    "api_secret":  "DCxMAvgFcfckbea7EWwVTyPAaTX1GrWjhEbjELH3mWvM",
+    "api_key":     "PKK4ZZDESQ4ZLWWMCSULLG2QEY",
+    "api_secret":  "DVPt7EmR2pzW7gASgPeut6vDRnAwyuywVH956b33xyvo",
     "mode":        "paper"
   },
   "webhook_token": "luxalgo_secret_2026",
