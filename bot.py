@@ -153,7 +153,9 @@ class TrailSL:
             self.palier = prix * (1 + self.step)
         return None
 
-active_trails = {}
+active_trails  = {}
+cooldown_last  = {}   # { symbol: datetime }
+COOLDOWN_MIN   = 5    # minutes minimum entre deux trades sur le même symbole
 
 # ── Session filter ─────────────────────────────────────────────────────────────
 def is_asian_session():
@@ -249,6 +251,14 @@ def webhook():
         log.info(f"SELL ignoré ({source}/{signal}) — trailing SL gère les sorties")
         return jsonify({"status": "sell_ignored_trailing_sl_manages_exit"})
 
+    # BUY — cooldown ?
+    last = cooldown_last.get(symbol)
+    if last:
+        elapsed = (datetime.now(timezone.utc) - last.replace(tzinfo=timezone.utc) if last.tzinfo is None else datetime.now(timezone.utc) - last).total_seconds() / 60
+        if elapsed < COOLDOWN_MIN:
+            log.info(f"Cooldown {symbol} : {elapsed:.1f}/{COOLDOWN_MIN} min — ignoré")
+            return jsonify({"status": "cooldown", "minutes_restantes": round(COOLDOWN_MIN - elapsed, 1)})
+
     # BUY — déjà en position ?
     if symbol in active_trails:
         log.info(f"Déjà en position {symbol}")
@@ -299,7 +309,7 @@ def webhook():
 # ── Monitor trailing SL ────────────────────────────────────────────────────────
 def monitor_loop():
     while True:
-        time.sleep(10)
+        time.sleep(5)
         to_close = []
         for sym, trail in list(active_trails.items()):
             prix = get_prix(sym)
@@ -320,6 +330,7 @@ def monitor_loop():
                 to_close.append(sym)
         for sym in to_close:
             active_trails.pop(sym, None)
+            cooldown_last[sym] = datetime.now(timezone.utc)  # bloque nouveau BUY 5 min
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 @app.route("/recover")
