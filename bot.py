@@ -132,6 +132,56 @@ def is_asian_session():
     h = datetime.now(timezone.utc).hour
     return h >= 23 or h < 8
 
+# ── Filtre EMA 114 Belkhayate (1min Binance) ───────────────────────────────────
+_ema114_cache = {}  # symbol → {"ema": float, "slope": float, "ts": timestamp}
+EMA114_TTL    = 60  # secondes
+
+def get_ema114(symbol):
+    """
+    Calcule EMA 114 sur les 200 dernières bougies 1min Binance.
+    Retourne (ema, slope) :
+      slope > seuil  → tendance haussière → BUY autorisé
+      slope < -seuil → tendance baissière → SELL autorisé
+      |slope| < seuil → aplati → pas de trade
+    """
+    import time as _time
+    cached = _ema114_cache.get(symbol)
+    if cached and _time.time() - cached["ts"] < EMA114_TTL:
+        return cached["ema"], cached["slope"]
+
+    coin = symbol[:3].upper()
+    pair = coin + "USDT"
+    try:
+        url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval=1m&limit=200"
+        r = requests.get(url, timeout=8)
+        if r.status_code != 200:
+            return None, None
+        candles = r.json()
+        closes  = [float(c[4]) for c in candles]
+
+        # Calcul EMA 114
+        period = 114
+        k      = 2 / (period + 1)
+        ema    = sum(closes[:period]) / period
+        for price in closes[period:]:
+            ema = price * k + ema * (1 - k)
+
+        # Pente = différence EMA sur les 5 dernières bougies (normalisée)
+        ema_prev = sum(closes[:period]) / period
+        for price in closes[period:-5]:
+            ema_prev = price * k + ema_prev * (1 - k)
+        slope = (ema - ema_prev) / ema * 100  # en % du prix
+
+        _ema114_cache[symbol] = {"ema": ema, "slope": slope, "ts": _time.time()}
+        log.info(f"  EMA114 {symbol}: {ema:.2f} | slope={slope:.4f}%")
+        return ema, slope
+
+    except Exception as e:
+        log.warning(f"EMA114 erreur {symbol}: {e}")
+        return None, None
+
+SLOPE_THRESHOLD = 0.003  # % — en dessous = aplati, pas de trade
+
 # ── Webhook principal ─────────────────────────────────────────────────────────
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -155,6 +205,16 @@ def webhook():
     if config["sessions"]["block_asian_session"] and is_asian_session():
         log.info("Session asiatique — signal ignoré")
         return jsonify({"status": "asian_session_blocked"})
+
+    # Filtre EMA 114 Belkhayate (1min)
+    ema114, slope = get_ema114(symbol)
+    if ema114 is not None:
+        if abs(slope) < SLOPE_THRESHOLD:
+            log.info(f"  EMA114 aplatie ({slope:.4f}%) — signal ignoré")
+            return jsonify({"status": "ema114_flat", "slope": slope})
+        if side == "buy" and slope < 0:
+            log.info(f"  EMA114 baissière ({slope:.4f}%) — BUY bloqué")
+            return jsonify({"status": "ema114_bearish", "slope": slope})
 
     # SELL ignoré — sorties gérées uniquement par le Trailing SL
     if side == "sell":
