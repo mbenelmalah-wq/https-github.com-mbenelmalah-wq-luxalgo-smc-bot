@@ -322,6 +322,31 @@ def monitor_loop():
             active_trails.pop(sym, None)
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
+@app.route("/recover")
+def recover():
+    """Reconstruit les trails manquants depuis les positions Alpaca ouvertes."""
+    try:
+        pos_list = api_call("GET", "/positions")
+        if not isinstance(pos_list, list):
+            return jsonify({"error": "impossible de lire les positions"}), 500
+        recovered = []
+        for p in pos_list:
+            sym   = p["symbol"].replace("/", "")
+            if sym in active_trails:
+                continue
+            entry = float(p["avg_entry_price"])
+            mm_key = f"money_management_{sym}"
+            mm = config.get(mm_key, config["money_management_default"])
+            mm["mise"] = abs(float(p["market_value"]))
+            active_trails[sym] = TrailSL(sym, entry, "buy", mm)
+            recovered.append({"symbol": sym, "entry": entry,
+                               "sl": round(active_trails[sym].sl, 2),
+                               "tp": round(active_trails[sym].tp, 2)})
+            log.info(f"  RECOVER {sym} entry={entry:.2f} SL={active_trails[sym].sl:.2f} TP={active_trails[sym].tp:.2f}")
+        return jsonify({"status": "ok", "recovered": recovered})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/status")
 def status():
     return jsonify({
