@@ -167,7 +167,13 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
     </div>
 
     <div class="card">
-      <div class="card-hdr">◈ État détaillé des 8 Piliers</div>
+      <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
+        <span>◈ État détaillé des 8 Piliers</span>
+        <span id="src-legend" style="font-size:10px;color:var(--muted)">
+          <span style="color:#22c55e">●</span> TradingView
+          <span style="color:#64748b;margin-left:6px">●</span> yfinance
+        </span>
+      </div>
       <div id="mtable"><div class="loading">--</div></div>
     </div>
 
@@ -303,13 +309,17 @@ function renderTable(data){
     const chgC = (d.change_pct||0)>=0?'pos':'neg';
     const chgS = ((d.change_pct||0)>=0?'+':'')+(d.change_pct||0).toFixed(2)+'%';
     const star = sym===data.leader?' ★':'';
+    const isTv = d.source==='tradingview';
+    const srcDot = isTv
+      ? `<span title="Données TradingView réelles" style="color:#22c55e;font-size:10px">● TV</span>`
+      : `<span title="Données yfinance (approximation)" style="color:#64748b;font-size:10px">● ~</span>`;
     let div = '';
     if(d.divergence==='BEARISH_DIV') div='<span class="divbadge BEARISH_DIV">DIV↓</span>';
     else if(d.divergence==='BULLISH_DIV') div='<span class="divbadge BULLISH_DIV">DIV↑</span>';
 
     h += `<div class="mrow">
       <div class="msym" style="color:${col}">${sym}${star}</div>
-      <div class="mrole">${def.role||''}</div>
+      <div class="mrole">${def.role||''}<br>${srcDot}</div>
       <div class="badge ${st}">${st}</div>
       <div class="chg ${chgC}" style="font-size:11px">${chgS}</div>
       <div>${div}</div>

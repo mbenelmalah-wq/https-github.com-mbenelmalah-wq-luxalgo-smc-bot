@@ -1,10 +1,24 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import json, os
 
 app = Flask(__name__)
+
+# ─── Stockage des signaux TradingView reçus par webhook ───────────────────────
+TV_STATE_FILE = os.path.join(os.path.dirname(__file__), 'tv_state.json')
+
+def load_tv_state():
+    if os.path.exists(TV_STATE_FILE):
+        with open(TV_STATE_FILE) as f:
+            return json.load(f)
+    return {}
+
+def save_tv_state(state):
+    with open(TV_STATE_FILE, 'w') as f:
+        json.dump(state, f, indent=2)
 
 MARKETS = {
     'GC':  {'name': 'Or',           'role': 'Détecteur de stress monétaire', 'ticker': 'GC=F',    'risk_polarity': -1, 'color': '#FFD700'},
@@ -105,7 +119,7 @@ def fetch_all_markets():
 
             e_history = energy.tail(15).replace([np.inf, -np.inf], 0).fillna(0)
 
-            results[sym] = {
+            yf_result = {
                 'error':          False,
                 'state':          direction,
                 'dir_score':      dir_score,
@@ -119,7 +133,21 @@ def fetch_all_markets():
                 'role':           info['role'],
                 'color':          info['color'],
                 'risk_polarity':  info['risk_polarity'],
+                'source':         'yfinance',
             }
+
+            # Écrase avec les vraies données TradingView si disponibles
+            tv = load_tv_state().get(sym)
+            if tv:
+                yf_result['state']      = tv.get('direction', direction)
+                yf_result['energy']     = tv.get('energy', yf_result['energy'])
+                yf_result['divergence'] = tv.get('divergence', divergence)
+                yf_result['pivot_pos']  = tv.get('pivot_pos', '')
+                yf_result['tv_time']    = tv.get('timestamp', '')
+                yf_result['source']     = 'tradingview'
+
+            results[sym] = yf_result
+
         except Exception as exc:
             results[sym] = {
                 'error': True, 'state': 'NEUTRAL', 'energy': 0,
@@ -251,6 +279,54 @@ def active_patterns(markets_data, score):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+# ─── WEBHOOK TradingView ───────────────────────────────────────────────────────
+@app.route('/webhook/belkhayate', methods=['POST'])
+def webhook_belkhayate():
+    """
+    Reçoit les signaux des indicateurs Belkhayate depuis TradingView.
+
+    Format JSON attendu :
+    {
+      "symbol":     "GC",
+      "direction":  "BULLISH" | "BEARISH" | "NEUTRAL",
+      "energy":     2.5,           (optionnel — valeur Belkhayate Énergie)
+      "divergence": "BEARISH_DIV" | "BULLISH_DIV" | "NONE",  (optionnel)
+      "pivot_pos":  "above_FA" | "below_MI" | "",  (optionnel)
+      "price":      2350.5          (optionnel)
+    }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'JSON invalide'}), 400
+
+    sym = str(data.get('symbol', '')).upper()
+    if sym not in MARKETS:
+        return jsonify({'error': f'Symbole inconnu: {sym}'}), 400
+
+    direction = str(data.get('direction', 'NEUTRAL')).upper()
+    if direction not in ('BULLISH', 'BEARISH', 'NEUTRAL'):
+        return jsonify({'error': 'direction invalide'}), 400
+
+    state = load_tv_state()
+    state[sym] = {
+        'direction':  direction,
+        'energy':     float(data.get('energy', 0)),
+        'divergence': data.get('divergence', 'NONE'),
+        'pivot_pos':  data.get('pivot_pos', ''),
+        'price':      float(data.get('price', 0)),
+        'timestamp':  datetime.now().isoformat(),
+    }
+    save_tv_state(state)
+
+    return jsonify({'ok': True, 'symbol': sym, 'direction': direction})
+
+
+@app.route('/webhook/status', methods=['GET'])
+def webhook_status():
+    """Affiche les derniers signaux TradingView reçus."""
+    return jsonify(load_tv_state())
 
 
 @app.route('/api/data')
