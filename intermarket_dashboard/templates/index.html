@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intermarket Dashboard — Méthode Belkhayate</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:    #080d1a;
+  --card:  #0f1829;
+  --border:#1e3055;
+  --gold:  #c9a84c;
+  --gold2: #ffd700;
+  --txt:   #cbd5e1;
+  --muted: #64748b;
+  --on:    #22c55e;
+  --off:   #ef4444;
+  --neu:   #eab308;
+}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+
+/* HEADER */
+.hdr{
+  background:linear-gradient(135deg,#080d1a,#130a2a);
+  border-bottom:1px solid var(--gold);
+  padding:14px 24px;
+  display:flex;justify-content:space-between;align-items:center
+}
+.hdr h1{font-size:17px;color:var(--gold2);letter-spacing:3px;text-transform:uppercase}
+.hdr .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.btn{background:rgba(201,168,76,.12);border:1px solid var(--gold);color:var(--gold);
+  padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;letter-spacing:1px;
+  transition:.2s}
+.btn:hover{background:rgba(201,168,76,.25)}
+.ts{font-size:10px;color:var(--muted)}
+
+/* LAYOUT */
+.wrap{display:grid;grid-template-columns:1fr 360px;gap:16px;padding:16px;max-width:1380px;margin:0 auto}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.card-hdr{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;
+  padding:10px 16px;border-bottom:1px solid var(--border)}
+
+/* OCTAGON */
+.oct-wrap{display:flex;flex-direction:column;align-items:center;padding:20px 16px}
+.oct{position:relative;width:400px;height:400px;flex-shrink:0}
+.oct svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+
+.center{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:96px;height:96px;border-radius:50%;
+  background:radial-gradient(circle,#1a0a35,#080d1a);
+  border:2px solid var(--gold);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;z-index:10
+}
+.center .lbl{font-size:8px;color:var(--gold);letter-spacing:1px;text-transform:uppercase}
+.center .sc{font-size:26px;font-weight:700;color:var(--gold2);line-height:1}
+
+.node{
+  position:absolute;width:76px;height:76px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:transform .2s;border:2px solid rgba(255,255,255,.1);
+  background:radial-gradient(circle,rgba(255,255,255,.05),rgba(8,13,26,.95))
+}
+.node:hover{transform:scale(1.1)}
+.node.BULLISH{border-color:var(--on);box-shadow:0 0 18px rgba(34,197,94,.4)}
+.node.BEARISH{border-color:var(--off);box-shadow:0 0 18px rgba(239,68,68,.4)}
+.node.NEUTRAL{border-color:var(--neu);box-shadow:0 0 8px rgba(234,179,8,.2)}
+.node .sym{font-size:13px;font-weight:700;color:#fff}
+.node .px{font-size:9px;color:rgba(255,255,255,.6);margin-top:1px}
+.node .chg{font-size:9px;margin-top:1px}
+.chg.pos{color:var(--on)}.chg.neg{color:var(--off)}
+.ebars{display:flex;align-items:flex-end;height:14px;gap:1px;margin-top:3px}
+.ebar{width:4px;border-radius:1px}
+
+/* MARKET TABLE */
+.mrow{
+  display:grid;grid-template-columns:44px 1fr 72px 52px 56px;
+  align-items:center;padding:7px 14px;border-bottom:1px solid rgba(30,48,85,.5);
+  font-size:12px
+}
+.mrow:last-child{border-bottom:none}
+.mrow:hover{background:rgba(255,255,255,.02)}
+.msym{font-weight:700;font-size:13px}
+.mrole{font-size:10px;color:var(--muted)}
+.badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-align:center}
+.badge.BULLISH{background:rgba(34,197,94,.15);color:var(--on)}
+.badge.BEARISH{background:rgba(239,68,68,.15);color:var(--off)}
+.badge.NEUTRAL{background:rgba(234,179,8,.15);color:var(--neu)}
+.divbadge{font-size:9px;padding:1px 5px;border-radius:3px}
+.divbadge.BEARISH_DIV{background:rgba(239,68,68,.15);color:var(--off)}
+.divbadge.BULLISH_DIV{background:rgba(34,197,94,.15);color:var(--on)}
+
+/* RIGHT PANEL */
+.rpanel{display:flex;flex-direction:column;gap:14px}
+
+/* REGIME */
+.regime-val{
+  font-size:19px;font-weight:700;text-align:center;
+  padding:12px;border-radius:8px;background:rgba(0,0,0,.3);
+  margin:12px 16px 0
+}
+.regime-val.risk-on{color:var(--on);border:1px solid var(--on)}
+.regime-val.risk-off{color:var(--off);border:1px solid var(--off)}
+.regime-val.neutral{color:var(--neu);border:1px solid var(--neu)}
+.sbar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;margin:10px 16px 4px;overflow:hidden}
+.sfill{height:100%;border-radius:3px;transition:width .5s}
+.slabels{display:flex;justify-content:space-between;padding:0 16px 12px;font-size:10px;color:var(--muted)}
+
+/* LEADER */
+.leader-box{display:flex;justify-content:center;padding:12px 16px 6px}
+.leader{display:inline-flex;align-items:center;gap:6px;background:rgba(201,168,76,.08);
+  border:1px solid var(--gold);border-radius:8px;padding:6px 14px;font-size:13px;color:var(--gold)}
+.ldesc{text-align:center;font-size:11px;color:var(--muted);padding:0 16px 12px}
+
+/* PATTERNS */
+.plist{padding:12px 14px}
+.pitem{background:rgba(0,0,0,.3);border-radius:8px;padding:9px 10px;margin-bottom:8px;
+  border-left:3px solid #2196F3}
+.pitem.LONG{border-left-color:var(--on)}
+.pitem.SHORT{border-left-color:var(--off)}
+.pitem.WATCH{border-left-color:var(--neu)}
+.phdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.pname{font-size:12px;font-weight:600}
+.pprob{font-size:11px;color:var(--gold)}
+.pdesc{font-size:10px;color:var(--muted)}
+.pbadge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;margin-right:4px}
+.pbadge.LONG{background:rgba(34,197,94,.15);color:var(--on)}
+.pbadge.SHORT{background:rgba(239,68,68,.15);color:var(--off)}
+.pbadge.WATCH{background:rgba(234,179,8,.15);color:var(--neu)}
+.no-pat{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+
+/* LOADING */
+.loading{text-align:center;color:var(--muted);padding:40px;font-size:13px}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div>
+    <h1>⬡ Intermarket Dashboard — Méthode Belkhayate</h1>
+    <div class="sub">Les 8 Piliers de la Liquidité Globale · Édition Institutionnelle 2026</div>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center">
+    <span class="ts" id="ts">--</span>
+    <button class="btn" onclick="load()">↻ ACTUALISER</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- LEFT -->
+  <div style="display:flex;flex-direction:column;gap:14px">
+
+    <div class="card">
+      <div class="card-hdr">◈ Nœud Octogone — Liquidité Globale</div>
+      <div class="oct-wrap">
+        <div class="oct" id="oct">
+          <div class="loading"><span class="spin">⟳</span> Chargement des données marché...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">◈ État détaillé des 8 Piliers</div>
+      <div id="mtable"><div class="loading">--</div></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT -->
+  <div class="rpanel">
+
+    <div class="card">
+      <div class="card-hdr">◈ Régime de Liquidité Globale</div>
+      <div class="regime-val neutral" id="regime">--</div>
+      <div class="sbar"><div class="sfill" id="sfill" style="width:50%;background:var(--neu)"></div></div>
+      <div class="slabels">
+        <span>RISK-OFF FORT</span>
+        <span id="stxt">Score: --</span>
+        <span>RISK-ON FORT</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">◈ Tête du Marché (Leader)</div>
+      <div class="leader-box"><div class="leader" id="leader">★ --</div></div>
+      <div class="ldesc" id="ldesc">--</div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">◈ Patterns Actifs (15 Trades Haute Probabilité)</div>
+      <div class="plist" id="plist"><div class="no-pat">Analyse en cours...</div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const COLORS = {
+  GC:'#FFD700',CL:'#FF6B35',HG:'#CD7F32',ES:'#4CAF50',
+  ZN:'#2196F3',BTC:'#FF9800',JPY:'#9C27B0',DX:'#00BCD4'
+};
+
+const POSITIONS = {
+  GC: 0, ES: 45, BTC: 90, CL: 135,
+  DX: 180, HG: 225, ZN: 270, JPY: 315
+};
+
+function polar(angle, r, cx, cy){
+  const a = (angle - 90) * Math.PI / 180;
+  return {x: cx + r*Math.cos(a), y: cy + r*Math.sin(a)};
+}
+
+function fmtPrice(p, sym){
+  if(!p) return '--';
+  if(sym==='BTC') return '$'+Math.round(p).toLocaleString('fr-FR');
+  if(p > 1000) return p.toFixed(0);
+  if(p > 100)  return p.toFixed(1);
+  return p.toFixed(2);
+}
+
+function miniEnergy(hist){
+  if(!hist||!hist.length) return '';
+  const max = Math.max(...hist.map(Math.abs), 0.01);
+  return hist.slice(-6).map(e=>{
+    const h = Math.max(2, Math.abs(e)/max*14);
+    const c = e >= 0 ? '#9ca3af' : '#3b82f6';
+    return `<div class="ebar" style="height:${h}px;background:${c}"></div>`;
+  }).join('');
+}
+
+function renderOctagon(data){
+  const el = document.getElementById('oct');
+  const W=400, H=400, cx=W/2, cy=H/2, R=155, NS=76;
+  const reg = data.regime;
+  const rc  = reg.includes('RISK-ON')?'var(--on)':reg.includes('RISK-OFF')?'var(--off)':'var(--neu)';
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}">`;
+  Object.entries(POSITIONS).forEach(([sym,ang])=>{
+    const p = polar(ang,R,cx,cy);
+    const d = data.markets[sym];
+    if(!d||d.error) return;
+    const op = d.state==='NEUTRAL'?.15:.45;
+    svg += `<line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}"
+      stroke="${COLORS[sym]}" stroke-width="1.5" opacity="${op}" stroke-dasharray="5,5"/>`;
+  });
+  svg += '</svg>';
+
+  let nodes = '';
+  const sc = data.score;
+  nodes += `<div class="center">
+    <div class="lbl">Liquidité</div><div class="lbl">Globale</div>
+    <div class="sc" style="color:${rc}">${sc>0?'+':''}${sc}</div>
+  </div>`;
+
+  Object.entries(POSITIONS).forEach(([sym,ang])=>{
+    const pos = polar(ang,R,cx,cy);
+    const d   = data.markets[sym];
+    const col = COLORS[sym];
+    const x   = pos.x - NS/2, y = pos.y - NS/2;
+
+    if(!d||d.error){
+      nodes += `<div class="node NEUTRAL" style="left:${x}px;top:${y}px">
+        <div class="sym" style="color:${col}">${sym}</div>
+        <div class="px">N/A</div></div>`;
+      return;
+    }
+
+    const st  = d.state||'NEUTRAL';
+    const chgC = d.change_pct>=0?'pos':'neg';
+    const chgS = (d.change_pct>=0?'+':'')+d.change_pct.toFixed(2)+'%';
+    const isLeader = sym===data.leader;
+    const star = isLeader?`<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:14px;color:${col}">★</div>`:'';
+
+    nodes += `
+    <div class="node ${st}" style="left:${x}px;top:${y}px;
+      background:radial-gradient(circle,${col}18,rgba(8,13,26,.95));border-color:${col};" >
+      ${star}
+      <div class="sym" style="color:${col}">${sym}</div>
+      <div class="px">${fmtPrice(d.price,sym)}</div>
+      <div class="chg ${chgC}">${chgS}</div>
+      <div class="ebars">${miniEnergy(d.energy_history)}</div>
+    </div>`;
+  });
+
+  el.innerHTML = svg + nodes;
+}
+
+function renderTable(data){
+  const el = document.getElementById('mtable');
+  const defs = data.market_definitions||{};
+  let h = '';
+  Object.entries(data.markets).forEach(([sym,d])=>{
+    const col  = COLORS[sym]||'#fff';
+    const def  = defs[sym]||{};
+    const st   = d.state||'NEUTRAL';
+    const chgC = (d.change_pct||0)>=0?'pos':'neg';
+    const chgS = ((d.change_pct||0)>=0?'+':'')+(d.change_pct||0).toFixed(2)+'%';
+    const star = sym===data.leader?' ★':'';
+    let div = '';
+    if(d.divergence==='BEARISH_DIV') div='<span class="divbadge BEARISH_DIV">DIV↓</span>';
+    else if(d.divergence==='BULLISH_DIV') div='<span class="divbadge BULLISH_DIV">DIV↑</span>';
+
+    h += `<div class="mrow">
+      <div class="msym" style="color:${col}">${sym}${star}</div>
+      <div class="mrole">${def.role||''}</div>
+      <div class="badge ${st}">${st}</div>
+      <div class="chg ${chgC}" style="font-size:11px">${chgS}</div>
+      <div>${div}</div>
+    </div>`;
+  });
+  el.innerHTML = h;
+}
+
+function renderRegime(data){
+  const el  = document.getElementById('regime');
+  const reg = data.regime;
+  const sc  = data.score;
+  el.className = 'regime-val ' + (reg.includes('RISK-ON')?'risk-on':reg.includes('RISK-OFF')?'risk-off':'neutral');
+  el.textContent = reg;
+  const pct = ((sc+8)/16)*100;
+  const bc  = sc>=2?'var(--on)':sc<=-2?'var(--off)':'var(--neu)';
+  document.getElementById('sfill').style.width = pct+'%';
+  document.getElementById('sfill').style.background = bc;
+  document.getElementById('stxt').textContent = `Score: ${sc>0?'+':''}${sc} / ${data.aligned}`;
+}
+
+function renderLeader(data){
+  const defs = data.market_definitions||{};
+  if(!data.leader) return;
+  const sym = data.leader;
+  const def = defs[sym]||{};
+  const col = COLORS[sym]||'#fff';
+  document.getElementById('leader').innerHTML =
+    `★ <span style="color:${col};font-weight:700">${sym}</span> — ${def.name||''}`;
+  document.getElementById('ldesc').textContent = def.role||'';
+}
+
+function renderPatterns(data){
+  const el = document.getElementById('plist');
+  const ps = data.patterns||[];
+  if(!ps.length){el.innerHTML='<div class="no-pat">Aucun pattern actif détecté</div>';return;}
+  el.innerHTML = ps.map(p=>`
+    <div class="pitem ${p.bias}">
+      <div class="phdr">
+        <div class="pname">
+          <span class="pbadge ${p.bias}">${p.bias}</span>
+          Trade #${p.id} — ${p.name}
+        </div>
+        <div class="pprob">${p.prob}%</div>
+      </div>
+      <div class="pdesc">
+        <span style="color:${COLORS[p.market]||'#fff'};font-weight:600">${p.market}</span>
+        — ${p.desc}
+      </div>
+    </div>`).join('');
+}
+
+async function load(){
+  try{
+    document.getElementById('regime').textContent = '⟳ Chargement...';
+    document.getElementById('regime').className = 'regime-val neutral';
+    const r = await fetch('/api/data');
+    const d = await r.json();
+    renderOctagon(d);
+    renderTable(d);
+    renderRegime(d);
+    renderLeader(d);
+    renderPatterns(d);
+    const t = new Date(d.timestamp);
+    document.getElementById('ts').textContent =
+      t.toLocaleTimeString('fr-FR')+' — '+t.toLocaleDateString('fr-FR');
+  }catch(e){
+    console.error(e);
+    document.getElementById('regime').textContent = 'ERREUR';
+  }
+}
+
+load();
+setInterval(load, 5*60*1000); // Auto-refresh toutes les 5 min
+</script>
+</body>
+</html>
