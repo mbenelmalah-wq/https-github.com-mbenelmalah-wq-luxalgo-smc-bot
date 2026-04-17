@@ -122,19 +122,58 @@ def normalize_symbol(raw):
                "BTCUSDT": "BTCUSD", "ETHUSDT": "ETHUSD"}
     return mapping.get(raw.upper().replace("-", ""), raw.upper().replace("/", ""))
 
+# ── Stop Orders Alpaca ────────────────────────────────────────────────────────
+def alpaca_sym_format(symbol):
+    """BTCUSD → BTC/USD"""
+    return symbol[:3] + "/" + symbol[3:]
+
+def placer_stop_order(symbol, qty, stop_price, current_price=None):
+    """Place un Stop Market order — s'exécute instantanément quand prix < stop_price."""
+    if current_price and stop_price >= current_price * 0.9995:
+        log.info(f"  STOP ORDER ignoré {symbol}: stop ({stop_price:.4f}) trop proche du prix ({current_price:.4f})")
+        return None
+    sym_api = alpaca_sym_format(symbol)
+    payload = {
+        "symbol": sym_api, "qty": str(round(qty, 6)),
+        "side": "sell", "type": "stop",
+        "stop_price": str(round(stop_price, 4)),
+        "time_in_force": "gtc"
+    }
+    r = api_call("POST", "/orders", payload)
+    if r and r.get("id"):
+        log.info(f"  STOP ORDER placé {symbol} @ {stop_price:.4f} | id={r['id']}")
+        return r["id"]
+    log.warning(f"  STOP ORDER échec {symbol}: {r}")
+    return None
+
+def annuler_stop_order(order_id):
+    if not order_id:
+        return
+    try:
+        api_call("DELETE", f"/orders/{order_id}")
+    except Exception:
+        pass
+
+def mettre_a_jour_stop(symbol, old_id, new_sl, qty, current_price=None):
+    annuler_stop_order(old_id)
+    return placer_stop_order(symbol, qty, new_sl, current_price=current_price)
+
+
 # ── Trailing SL ───────────────────────────────────────────────────────────────
 class TrailSL:
     def __init__(self, symbol, entry, side, mm):
-        self.symbol  = symbol
-        self.entry   = entry
-        self.side    = side
-        self.tp      = entry * (1 + mm["take_profit_pct"])
-        self.sl      = entry * (1 - mm["trailing_sl_pct"])
-        self.palier  = entry * (1 + mm["profit_trigger_pct"])
-        self.step    = mm["trail_step_pct"]
-        self.be_lock = False
-        self.time_in = datetime.now(timezone.utc)
-        self.mise    = mm.get("mise", 0)
+        self.symbol   = symbol
+        self.entry    = entry
+        self.side     = side
+        self.tp       = entry * (1 + mm["take_profit_pct"])
+        self.sl       = entry * (1 - mm["trailing_sl_pct"])
+        self.palier   = entry * (1 + mm["profit_trigger_pct"])
+        self.step     = mm["trail_step_pct"]
+        self.be_lock  = False
+        self.time_in  = datetime.now(timezone.utc)
+        self.mise     = mm.get("mise", 0)
+        self.stop_id  = None   # ID stop order Alpaca actif
+        self.qty      = 0.0    # quantité pour le stop order
 
     def update(self, prix):
         """Retourne 'TP', 'SL', ou None"""
@@ -143,6 +182,7 @@ class TrailSL:
         if prix <= self.sl:
             return "SL"
         if prix >= self.palier:
+            ancien_sl = self.sl
             if not self.be_lock:
                 self.sl = self.entry
                 self.be_lock = True
@@ -151,6 +191,10 @@ class TrailSL:
                 if new_sl > self.sl:
                     self.sl = new_sl
             self.palier = prix * (1 + self.step)
+            # Mettre à jour le Stop Order Alpaca si SL a bougé
+            if self.sl != ancien_sl and self.qty > 0:
+                log.info(f"  {self.symbol} SL → {self.sl:.4f} | prix={prix:.4f}")
+                self.stop_id = mettre_a_jour_stop(self.symbol, self.stop_id, self.sl, self.qty, current_price=prix)
         return None
 
 active_trails  = {}
@@ -293,8 +337,11 @@ def webhook():
 
     log.info(f"  Ordre placé: {ordre.get('id')}")
 
-    # Trailing SL
-    active_trails[symbol] = TrailSL(symbol, prix, "buy", mm)
+    # Trailing SL + Stop Order initial
+    trail = TrailSL(symbol, prix, "buy", mm)
+    trail.qty = qty  # quantité achetée
+    trail.stop_id = placer_stop_order(symbol, qty, trail.sl, current_price=prix)
+    active_trails[symbol] = trail
     trades_history.append({
         "time": datetime.now(timezone.utc).isoformat(),
         "symbol": symbol, "side": "buy", "source": source,
@@ -321,14 +368,40 @@ def monitor_loop():
                 except: pass
 
         to_close = []
+
+        # Détecter positions fermées automatiquement par le Stop Order Alpaca
+        alpaca_syms = set()
+        if isinstance(pos_list, list):
+            for p in pos_list:
+                s = p.get("symbol", "").replace("/", "")
+                if not s.endswith("USD"):
+                    s += "USD"
+                alpaca_syms.add(s)
         for sym, trail in list(active_trails.items()):
+            if sym not in alpaca_syms:
+                log.info(f"  STOP ORDER Alpaca exécuté: {sym} — position fermée automatiquement")
+                pnl = (trail.sl - trail.entry) / trail.entry * trail.mise
+                for t in reversed(trades_history):
+                    if t["symbol"] == sym and "exit" not in t:
+                        t["exit"] = trail.sl
+                        t["reason"] = "Stop Order Alpaca"
+                        t["pnl"] = round(pnl, 2)
+                        break
+                trail.stop_id = None
+                to_close.append(sym)
+
+        for sym, trail in list(active_trails.items()):
+            if sym in to_close:
+                continue
             prix = prix_alpaca.get(sym) or get_prix(sym)
             if not prix:
                 continue
             result = trail.update(prix)
             if result:
                 log.info(f"  SORTIE {sym} [{result}] @ {prix:.2f}")
-                # Fermer position
+                # Annuler stop order avant fermeture manuelle
+                annuler_stop_order(trail.stop_id)
+                trail.stop_id = None
                 api_call("DELETE", f"/positions/{sym}")
                 pnl = (prix - trail.entry) / trail.entry * trail.mise
                 for t in reversed(trades_history):
@@ -359,10 +432,14 @@ def recover():
             mm_key = f"money_management_{sym}"
             mm = config.get(mm_key, config["money_management_default"])
             mm["mise"] = abs(float(p["market_value"]))
-            active_trails[sym] = TrailSL(sym, entry, "buy", mm)
+            trail = TrailSL(sym, entry, "buy", mm)
+            trail.qty = abs(float(p.get("qty", 0)))
+            if trail.qty > 0:
+                trail.stop_id = placer_stop_order(sym, trail.qty, trail.sl)
+            active_trails[sym] = trail
             recovered.append({"symbol": sym, "entry": entry,
-                               "sl": round(active_trails[sym].sl, 2),
-                               "tp": round(active_trails[sym].tp, 2)})
+                               "sl": round(trail.sl, 2),
+                               "tp": round(trail.tp, 2)})
             log.info(f"  RECOVER {sym} entry={entry:.2f} SL={active_trails[sym].sl:.2f} TP={active_trails[sym].tp:.2f}")
         return jsonify({"status": "ok", "recovered": recovered})
     except Exception as e:
