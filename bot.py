@@ -310,9 +310,19 @@ def webhook():
 def monitor_loop():
     while True:
         time.sleep(5)
+        # Prix temps réel depuis Alpaca (priorité sur CoinGecko/Binance)
+        pos_list = api_call("GET", "/positions")
+        prix_alpaca = {}
+        if isinstance(pos_list, list):
+            for p in pos_list:
+                sym_p = p.get("symbol","").replace("/","")
+                if not sym_p.endswith("USD"): sym_p += "USD"
+                try: prix_alpaca[sym_p] = float(p["current_price"])
+                except: pass
+
         to_close = []
         for sym, trail in list(active_trails.items()):
-            prix = get_prix(sym)
+            prix = prix_alpaca.get(sym) or get_prix(sym)
             if not prix:
                 continue
             result = trail.update(prix)
