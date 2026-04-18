@@ -17,22 +17,22 @@
     "note": "Paramètres défaut LuxAlgo SMC — WR cible 65%"
   },
   "money_management_BTCUSD": {
-    "take_profit_pct":        0.005,
+    "take_profit_pct":        0.008,
     "trailing_sl_pct":        0.003,
     "trail_step_pct":         0.0015,
     "profit_trigger_pct":     0.003,
     "default_win_rate":       0.65,
     "default_win_loss_ratio": 2.0,
-    "note": "BTC — TP=0.50% SL=0.30% Trig=0.30%"
+    "note": "BTC — TP=0.80% SL=0.30% Trig=0.30%"
   },
   "money_management_ETHUSD": {
     "take_profit_pct":        0.015,
-    "trailing_sl_pct":        0.0015,
+    "trailing_sl_pct":        0.003,
     "trail_step_pct":         0.0015,
     "profit_trigger_pct":     0.001,
     "default_win_rate":       0.65,
     "default_win_loss_ratio": 5.0,
-    "note": "ETH — TP=1.50% SL=0.15% Trig=0.10%"
+    "note": "ETH — TP=1.50% SL=0.30% Trig=0.10%"
   },
   "sessions": {
     "block_asian_session": true,
