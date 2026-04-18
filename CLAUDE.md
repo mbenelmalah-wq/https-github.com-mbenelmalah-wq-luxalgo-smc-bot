@@ -23,10 +23,10 @@
 
 ## 🔑 COMPTES & URLS — NE PAS MÉLANGER
 
-| Bot | Railway URL | Token TradingView | Alpaca |
-|-----|-------------|-------------------|--------|
-| SPLV3 principal | `alpaca-trading-bot-production-f693.up.railway.app/webhook` | `splv3_secret_2026` | Compte principal |
-| LuxAlgo SMC | `web-production-b2c39d.up.railway.app/webhook` | `luxalgo_secret_2026` | Compte secondaire |
+| Bot | Webhook | Dashboard | Token TradingView | Alpaca | Stratégie |
+|-----|---------|-----------|-------------------|--------|-----------|
+| SPLV3 principal | `alpaca-trading-bot-production-f693.up.railway.app/webhook` | `alpaca-trading-bot-production-f693.up.railway.app/dashboard` | `splv3_secret_2026` | Compte principal | SPLV3 + Elite EMAs + Elliott large caps 4/4 — MAX 3 pos — Half Kelly 12.5% |
+| LuxAlgo SMC | `web-production-b2c39d.up.railway.app/webhook` | `web-production-b2c39d.up.railway.app/dashboard` | `luxalgo_secret_2026` | Compte secondaire | LuxAlgo BOS/CHoCH — trailing SL — paper trading |
 
 - GitHub LuxAlgo : https://github.com/mbenelmalah-wq/https-github.com-mbenelmalah-wq-luxalgo-smc-bot
-- Railway projet : incredible-healing
+- Railway projet LuxAlgo : incredible-healing
