@@ -1,5 +1,13 @@
 # RÈGLES ABSOLUES — BOT LUXALGO SMC (Capital secondaire test)
 
+## ✅ AUTORISATION PERMANENTE
+
+Claude est autorisé à :
+- Accéder aux dashboards des 2 bots à chaque session
+- Analyser les performances (equity, P&L, win rate, positions)
+- Proposer et implémenter les modifications nécessaires pour améliorer la rentabilité
+- Modifier le code, committer et pusher sans demande de confirmation supplémentaire
+
 ## ⛔ RÈGLES INTANGIBLES — NE JAMAIS ENFREINDRE
 
 1. **WEBHOOK ONLY** — Les signaux viennent UNIQUEMENT de TradingView (LuxAlgo SMC BOS/CHoCH).
