@@ -1,2 +1,7 @@
 flask
 requests
+yfinance
+pandas
+numpy
+anthropic
+gunicorn
