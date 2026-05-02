@@ -1397,6 +1397,58 @@ IMPORTANT : Réponds UNIQUEMENT en JSON valide :
 
 Si tu ne peux pas identifier un marché clairement, ne l'inclus pas."""
 
+SOLO_PROMPT = """Tu es un expert Belkhayate — analyste de trade précis sur graphique unique.
+
+Analyse ce graphique TradingView avec les indicateurs Belkhayate et donne un signal de trade ACTIONNABLE.
+
+ÉTAPE 1 — Lis le graphique :
+1. Direction Belkhayate (bande colorée sous les bougies) :
+   - Verte = BULLISH | Rouge = BEARISH | Absente/grise = NEUTRAL
+
+2. Belkhayate Énergie (histogramme bas) :
+   - Barres grises/blanches = énergie acheteuse → valeur positive (ex: +2.5)
+   - Barres bleues = énergie vendeuse → valeur négative (ex: -1.8)
+   - Estime sur échelle ±5
+
+3. Pivots Belkhayate (lignes pointillées horizontales) :
+   - SI=rouge (résistance forte), LA=orange, SOL=jaune, FA=gris (pivot central),
+     MI=vert clair, RE=vert, DO=vert foncé (support fort)
+   - Note le niveau exact du pivot le plus proche du prix actuel
+   - Estime les prix exacts de chaque pivot visible
+
+4. Structure SMC visible : BOS (Break of Structure), CHoCH (Change of Character), Order Blocks
+
+ÉTAPE 2 — Signal de trade :
+- BUY : direction BULLISH + énergie positive + prix au-dessus FA ou rebond sur support (MI/RE/DO)
+- SELL : direction BEARISH + énergie négative + prix sous FA ou rejet sur résistance (SOL/LA/SI)
+- WAIT : signal ambigu, énergie faible, prix entre deux pivots sans confirmation
+
+ÉTAPE 3 — Niveaux précis :
+- Entrée : prix actuel ou niveau de retest du pivot clé
+- SL : pivot support/résistance immédiat sous/sur le prix (selon le trade)
+- TP1 : prochain pivot (ratio minimum 1:1.5)
+- TP2 : pivot suivant (ratio minimum 1:2.5)
+
+IMPORTANT : Réponds UNIQUEMENT en JSON valide :
+{
+  "symbol": "ES",
+  "timeframe": "1H",
+  "direction": "BULLISH",
+  "energy": 2.1,
+  "pivot_pos": "above_FA",
+  "signal": "BUY",
+  "confidence": 82,
+  "entry": 5320.0,
+  "sl": 5290.0,
+  "tp1": 5380.0,
+  "tp2": 5440.0,
+  "rr1": "1:2.0",
+  "rr2": "1:4.0",
+  "reason": "ES au-dessus du pivot FA avec énergie +2.1. BOS haussier confirmé. Régime RISK-ON aligné. ES était en retard sur l'Or et les Obligations qui ont déjà cassé leurs résistances.",
+  "wait_for": ""
+}
+Si signal WAIT : entry/sl/tp1/tp2 = null, wait_for = condition précise à attendre."""
+
 
 def analyze_screenshot_with_vision(image_base64, media_type='image/png'):
     import anthropic, re as _re
@@ -1811,6 +1863,81 @@ def api_vision_analyze_multi():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'type': type(e).__name__, 'detail': traceback.format_exc()}), 500
+
+
+# ── SOLO — Analyse graphique unique avec signal BUY/SELL/WAIT ────────────────
+
+@app.route('/api/solo/analyze', methods=['POST'])
+def api_solo_analyze():
+    import anthropic, re as _re, base64
+    try:
+        body = request.get_json(silent=True) or {}
+        img_b64    = body.get('image_base64', '')
+        media_type = body.get('media_type', 'image/png')
+        if not img_b64:
+            return jsonify({'error': 'image_base64 manquant'}), 400
+
+        api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+        if not api_key:
+            return jsonify({'error': 'ANTHROPIC_API_KEY non configuré'}), 500
+
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=1024,
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {'type': 'image', 'source': {
+                        'type': 'base64', 'media_type': media_type, 'data': img_b64}},
+                    {'type': 'text', 'text': SOLO_PROMPT},
+                ]
+            }]
+        )
+        raw = response.content[0].text.strip()
+        m = _re.search(r'\{[\s\S]*\}', raw)
+        if not m:
+            return jsonify({'error': 'Réponse Claude non parseable', 'raw': raw}), 500
+        result = json.loads(m.group())
+
+        # Sauvegarde dans historique vision
+        save_vision_history({
+            'timestamp': now_local().isoformat(),
+            'mode':      'solo',
+            'markets':   [result.get('symbol', '?')],
+            'analyse':   {
+                'action':          result.get('signal', ''),
+                'confiance':       result.get('confidence', 0),
+                'regime':          result.get('direction', ''),
+                'leader':          result.get('symbol', ''),
+                'justification':   result.get('reason', ''),
+                'niveaux':         f"E:{result.get('entry')} SL:{result.get('sl')} TP1:{result.get('tp1')} TP2:{result.get('tp2')}",
+                'direction_trade': 'LONG' if result.get('signal') == 'BUY' else ('SHORT' if result.get('signal') == 'SELL' else 'WAIT'),
+            },
+        })
+
+        # Alerte Telegram si confiance >= 75
+        if result.get('confidence', 0) >= 75 and result.get('signal') in ('BUY', 'SELL'):
+            sig = result.get('signal')
+            sym = result.get('symbol', '?')
+            conf = result.get('confidence', 0)
+            send_telegram_alert(
+                f'<b>🎯 SOLO Signal — {sym}</b>\n'
+                f'<b>{sig}</b> · Confiance: {conf}%\n'
+                f'Entrée: {result.get("entry")} · SL: {result.get("sl")}\n'
+                f'TP1: {result.get("tp1")} · TP2: {result.get("tp2")}\n'
+                f'R/R: {result.get("rr1","?")} / {result.get("rr2","?")}\n'
+                f'<i>{result.get("reason","")}</i>'
+            )
+
+        return jsonify({'ok': True, 'result': result})
+
+    except ImportError:
+        return jsonify({'error': 'pip install anthropic requis'}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

@@ -297,6 +297,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <span class="ts" id="ts">--</span>
     <button class="btn" onclick="openVisionModal()">📷 VISION</button>
+    <button class="btn" style="border-color:rgba(99,179,237,.5);color:#63b3ed" onclick="openSoloModal()">🎯 SOLO</button>
     <button class="btn" onclick="openHistoryModal()">📋 HISTORIQUE</button>
     <button class="btn" onclick="openSeasonaxModal()">🗓 SEASONAX</button>
     <button class="btn" onclick="openJournalModal()">📓 JOURNAL</button>
@@ -515,6 +516,69 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;
         margin-bottom:8px">Marchés détectés</div>
       <div id="vision-mkt-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SOLO -->
+<div id="solo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;
+  align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid #63b3ed;border-radius:16px;
+    padding:28px;width:540px;max-width:95vw;position:relative;max-height:90vh;overflow-y:auto">
+    <button onclick="closeSoloModal()" style="position:absolute;top:12px;right:14px;
+      background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
+    <div style="color:#63b3ed;font-size:13px;font-weight:700;letter-spacing:2px;
+      text-transform:uppercase;margin-bottom:4px">🎯 Mode SOLO — Signal Belkhayate</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px">
+      Colle ou glisse un seul graphique TradingView → BUY / SELL / WAIT avec niveaux précis
+    </div>
+
+    <div id="solo-drop" style="border:2px dashed #63b3ed44;border-radius:10px;
+      padding:40px 20px;text-align:center;cursor:pointer;transition:.2s;position:relative"
+      onclick="document.getElementById('solo-file').click()"
+      ondragover="event.preventDefault();this.style.borderColor='#63b3ed'"
+      ondragleave="this.style.borderColor='#63b3ed44'"
+      ondrop="handleSoloDrop(event)">
+      <div id="solo-drop-text" style="color:var(--muted);font-size:12px">
+        📷 Cliquer pour choisir · Glisser ici · Ctrl+V supporté
+      </div>
+      <img id="solo-preview" style="display:none;max-width:100%;max-height:200px;
+        border-radius:8px;margin-top:10px" />
+      <input id="solo-file" type="file" accept="image/*" style="display:none"
+        onchange="handleSoloFile(this.files[0])">
+    </div>
+
+    <div id="solo-status" style="margin-top:12px;font-size:12px;min-height:18px"></div>
+    <button id="solo-btn" class="btn" style="margin-top:12px;width:100%;justify-content:center;
+      display:none;background:rgba(99,179,237,.15);border-color:#63b3ed;color:#63b3ed"
+      onclick="sendSoloImage()">🎯 Analyser avec Claude</button>
+
+    <!-- Résultats -->
+    <div id="solo-results" style="display:none;margin-top:16px">
+
+      <!-- Badge signal -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div id="solo-signal-badge" style="font-size:32px;font-weight:900;letter-spacing:2px"></div>
+        <div>
+          <div id="solo-sym-tf" style="font-size:11px;color:var(--muted)"></div>
+          <div id="solo-confidence" style="font-size:13px;font-weight:700;color:var(--gold)"></div>
+        </div>
+      </div>
+
+      <!-- Grille niveaux -->
+      <div id="solo-levels-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
+
+      <!-- R/R -->
+      <div id="solo-rr" style="font-size:10px;color:var(--muted);margin-bottom:10px"></div>
+
+      <!-- Reason -->
+      <div id="solo-reason" style="font-size:11px;color:var(--txt);line-height:1.6;
+        padding:10px;background:rgba(0,0,0,.3);border-radius:8px;margin-bottom:8px"></div>
+
+      <!-- Wait for -->
+      <div id="solo-waitfor" style="display:none;font-size:11px;color:var(--gold);
+        padding:8px 10px;background:rgba(201,168,76,.08);border-radius:6px;
+        border-left:3px solid var(--gold)"></div>
     </div>
   </div>
 </div>
@@ -1575,6 +1639,126 @@ async function sendVisionImage(){
   }finally{
     btn.disabled=false; btn.textContent='Analyser avec Claude Vision';
   }
+}
+
+// ── Mode SOLO ────────────────────────────────────────────────────────────────
+
+let _soloB64 = null, _soloMime = 'image/png';
+
+function openSoloModal(){
+  document.getElementById('solo-modal').style.display='flex';
+  resetSoloModal();
+}
+function closeSoloModal(){
+  document.getElementById('solo-modal').style.display='none';
+}
+function resetSoloModal(){
+  _soloB64=null;
+  document.getElementById('solo-preview').style.display='none';
+  document.getElementById('solo-drop-text').style.display='';
+  document.getElementById('solo-btn').style.display='none';
+  document.getElementById('solo-status').textContent='';
+  document.getElementById('solo-results').style.display='none';
+  document.getElementById('solo-file').value='';
+}
+function handleSoloFile(file){
+  if(!file) return;
+  _soloMime = file.type || 'image/png';
+  const r = new FileReader();
+  r.onload = e => {
+    const data = e.target.result;
+    _soloB64 = data.split(',')[1];
+    document.getElementById('solo-preview').src = data;
+    document.getElementById('solo-preview').style.display='block';
+    document.getElementById('solo-drop-text').style.display='none';
+    document.getElementById('solo-btn').style.display='flex';
+    document.getElementById('solo-status').textContent='Image prête — cliquez Analyser.';
+  };
+  r.readAsDataURL(file);
+}
+function handleSoloDrop(e){
+  e.preventDefault();
+  document.getElementById('solo-drop').style.borderColor='#63b3ed44';
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('image/')) handleSoloFile(file);
+}
+document.addEventListener('paste', e=>{
+  if(document.getElementById('solo-modal').style.display==='none') return;
+  const item = Array.from(e.clipboardData.items).find(i=>i.type.startsWith('image/'));
+  if(item) handleSoloFile(item.getAsFile());
+});
+
+async function sendSoloImage(){
+  if(!_soloB64){ alert('Aucune image chargée'); return; }
+  const btn = document.getElementById('solo-btn');
+  const status = document.getElementById('solo-status');
+  btn.disabled=true; btn.textContent='⏳ Claude analyse...';
+  status.innerHTML='<span style="color:#63b3ed">⏳ Analyse en cours...</span>';
+  document.getElementById('solo-results').style.display='none';
+  try{
+    const r = await fetch('/api/solo/analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({image_base64:_soloB64, media_type:_soloMime})
+    });
+    const d = await r.json();
+    if(!r.ok){ status.innerHTML=`<span style="color:var(--off)">Erreur: ${d.error}</span>`; return; }
+    renderSoloResult(d.result);
+  }catch(e){
+    status.innerHTML=`<span style="color:var(--off)">Erreur réseau: ${e.message}</span>`;
+  }finally{
+    btn.disabled=false; btn.textContent='🎯 Analyser avec Claude';
+  }
+}
+
+function renderSoloResult(r){
+  const sig = r.signal || 'WAIT';
+  const col = sig==='BUY' ? 'var(--on)' : sig==='SELL' ? 'var(--off)' : 'var(--neu)';
+  document.getElementById('solo-signal-badge').innerHTML =
+    `<span style="color:${col}">${sig}</span>`;
+  document.getElementById('solo-sym-tf').textContent =
+    `${r.symbol||'?'} · ${r.timeframe||''} · ${r.direction||''}  E:${r.energy>0?'+':''}${r.energy}`;
+  document.getElementById('solo-confidence').textContent =
+    `Confiance ${r.confidence||0}% · Pivot: ${r.pivot_pos||''}`;
+
+  if(sig !== 'WAIT' && r.entry){
+    document.getElementById('solo-levels-grid').innerHTML = `
+      <div style="background:rgba(0,0,0,.4);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Entrée</div>
+        <div style="font-size:16px;font-weight:700;color:var(--txt);margin-top:2px">${r.entry}</div>
+      </div>
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:var(--off);text-transform:uppercase;letter-spacing:1px">Stop Loss</div>
+        <div style="font-size:16px;font-weight:700;color:var(--off);margin-top:2px">${r.sl}</div>
+      </div>
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:var(--on);text-transform:uppercase;letter-spacing:1px">TP1</div>
+        <div style="font-size:16px;font-weight:700;color:var(--on);margin-top:2px">${r.tp1}</div>
+        <div style="font-size:9px;color:var(--muted)">${r.rr1||''}</div>
+      </div>
+      <div style="background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.5);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:var(--on);text-transform:uppercase;letter-spacing:1px">TP2</div>
+        <div style="font-size:16px;font-weight:700;color:var(--on);margin-top:2px">${r.tp2}</div>
+        <div style="font-size:9px;color:var(--muted)">${r.rr2||''}</div>
+      </div>`;
+    document.getElementById('solo-rr').textContent =
+      `R/R TP1: ${r.rr1||'?'} · R/R TP2: ${r.rr2||'?'}`;
+  } else {
+    document.getElementById('solo-levels-grid').innerHTML='';
+    document.getElementById('solo-rr').textContent='';
+  }
+
+  document.getElementById('solo-reason').textContent = r.reason||'';
+  const wf = document.getElementById('solo-waitfor');
+  if(r.wait_for){
+    wf.style.display='block';
+    wf.textContent='⏳ Attendre : '+r.wait_for;
+  } else {
+    wf.style.display='none';
+  }
+  document.getElementById('solo-status').innerHTML=
+    `<span style="color:var(--on)">✓ Analyse complète</span>`;
+  document.getElementById('solo-results').style.display='block';
 }
 
 // ── Historique Vision ─────────────────────────────────────────────────────────
