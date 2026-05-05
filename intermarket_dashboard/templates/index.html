@@ -472,30 +472,45 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
       background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
     <div style="color:var(--gold2);font-size:13px;font-weight:700;letter-spacing:2px;
       text-transform:uppercase;margin-bottom:6px">Claude Vision · Analyse Belkhayate</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:16px">
-      Glisse une capture TradingView ou colle avec Ctrl+V
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">
+      Capture tes fenêtres TradingView directement — ou colle / glisse des images
     </div>
+
     <!-- Image 1 -->
-    <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Image 1 (marchés 1-4)</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-size:10px;color:var(--muted)">Image 1 (marchés 1-4)</div>
+      <button onclick="captureVisionWindow(1)" style="background:rgba(201,168,76,.15);
+        border:1px solid var(--gold);border-radius:6px;color:var(--gold);
+        font-size:10px;padding:3px 8px;cursor:pointer" id="vision-cap-btn1">
+        🖥 Capturer fenêtre
+      </button>
+    </div>
     <div id="vision-drop" style="border:2px dashed var(--border);border-radius:10px;
-      padding:30px 20px;text-align:center;cursor:pointer;transition:.2s;position:relative"
+      padding:20px;text-align:center;cursor:pointer;transition:.2s;position:relative"
       onclick="document.getElementById('vision-file').click()"
       ondragover="event.preventDefault();this.style.borderColor='var(--gold)'"
       ondragleave="this.style.borderColor='var(--border)'"
       ondrop="handleVisionDrop(event,1)">
-      <div id="vision-drop-text" style="color:var(--muted);font-size:12px">
-        📷 Cliquer pour choisir une image<br>ou glisser ici · Ctrl+V supporté
+      <div id="vision-drop-text" style="color:var(--muted);font-size:11px">
+        📷 Cliquer pour choisir · Glisser ici · Ctrl+V
       </div>
-      <img id="vision-preview" style="display:none;max-width:100%;max-height:160px;
-        border-radius:6px;margin-top:10px" />
+      <img id="vision-preview" style="display:none;max-width:100%;max-height:140px;
+        border-radius:6px;margin-top:8px" />
       <input id="vision-file" type="file" accept="image/*" style="display:none"
         onchange="handleVisionFile(this.files[0],1)">
     </div>
 
     <!-- Image 2 (optionnelle) -->
-    <div style="font-size:10px;color:var(--muted);margin:10px 0 4px">Image 2 — optionnelle (marchés 5-8)</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 4px">
+      <div style="font-size:10px;color:var(--muted)">Image 2 — optionnelle (marchés 5-8)</div>
+      <button onclick="captureVisionWindow(2)" style="background:rgba(201,168,76,.15);
+        border:1px solid var(--gold);border-radius:6px;color:var(--gold);
+        font-size:10px;padding:3px 8px;cursor:pointer" id="vision-cap-btn2">
+        🖥 Capturer fenêtre
+      </button>
+    </div>
     <div id="vision-drop2" style="border:2px dashed var(--border);border-radius:10px;
-      padding:20px;text-align:center;cursor:pointer;transition:.2s;position:relative"
+      padding:16px;text-align:center;cursor:pointer;transition:.2s;position:relative"
       onclick="document.getElementById('vision-file2').click()"
       ondragover="event.preventDefault();this.style.borderColor='var(--gold)'"
       ondragleave="this.style.borderColor='var(--border)'"
@@ -503,11 +518,12 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
       <div id="vision-drop-text2" style="color:var(--muted);font-size:11px">
         📷 Image 2 optionnelle
       </div>
-      <img id="vision-preview2" style="display:none;max-width:100%;max-height:130px;
+      <img id="vision-preview2" style="display:none;max-width:100%;max-height:120px;
         border-radius:6px;margin-top:8px" />
       <input id="vision-file2" type="file" accept="image/*" style="display:none"
         onchange="handleVisionFile(this.files[0],2)">
     </div>
+    <canvas id="vision-canvas" style="display:none"></canvas>
 
     <div id="vision-status" style="margin-top:14px;font-size:12px;min-height:20px"></div>
     <button id="vision-btn" class="btn" style="margin-top:14px;width:100%;justify-content:center;
@@ -1508,6 +1524,47 @@ setInterval(loadAnalytics, 10*60*1000);
 // ── Vision Modal ─────────────────────────────────────────────────────────────
 let _visionB64 = null, _visionMime = 'image/png';
 let _visionB64_2 = null, _visionMime_2 = 'image/png';
+
+async function captureVisionWindow(slot){
+  const btn = document.getElementById('vision-cap-btn'+slot);
+  const status = document.getElementById('vision-status');
+  try{
+    btn.disabled=true; btn.textContent='⏳ Sélectionne...';
+    status.innerHTML='<span style="color:var(--gold)">Choisis la fenêtre TradingView dans le sélecteur</span>';
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video:{cursor:'never', displaySurface:'window'}, audio:false
+    });
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    await video.play();
+    await new Promise(res=>setTimeout(res,300));
+    const canvas = document.getElementById('vision-canvas');
+    canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+    canvas.getContext('2d').drawImage(video,0,0);
+    stream.getTracks().forEach(t=>t.stop());
+    const dataUrl = canvas.toDataURL('image/png');
+    const b64 = dataUrl.split(',')[1];
+    if(slot===1){
+      _visionB64=b64; _visionMime='image/png';
+      document.getElementById('vision-preview').src=dataUrl;
+      document.getElementById('vision-preview').style.display='block';
+      document.getElementById('vision-drop-text').style.display='none';
+    } else {
+      _visionB64_2=b64; _visionMime_2='image/png';
+      document.getElementById('vision-preview2').src=dataUrl;
+      document.getElementById('vision-preview2').style.display='block';
+      document.getElementById('vision-drop-text2').style.display='none';
+    }
+    document.getElementById('vision-btn').style.display='block';
+    status.innerHTML=`<span style="color:var(--on)">✓ Image ${slot} capturée ${canvas.width}×${canvas.height}px</span>`;
+    btn.textContent='🖥 Recapturer'; btn.disabled=false;
+  }catch(e){
+    btn.disabled=false; btn.textContent='🖥 Capturer fenêtre';
+    if(e.name!=='NotAllowedError')
+      status.innerHTML=`<span style="color:var(--off)">Erreur: ${e.message}</span>`;
+    else status.textContent='';
+  }
+}
 
 function openVisionModal(){
   document.getElementById('vision-modal').style.display='flex';
