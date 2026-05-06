@@ -1842,8 +1842,9 @@ function renderSoloResult(r){
   const col = sig==='BUY' ? 'var(--on)' : sig==='SELL' ? 'var(--off)' : 'var(--neu)';
   document.getElementById('solo-signal-badge').innerHTML =
     `<span style="color:${col}">${sig}</span>`;
+  const prixActuel = r.prix_actuel ? ` · Prix: ${r.prix_actuel}` : '';
   document.getElementById('solo-sym-tf').textContent =
-    `${r.symbol||'?'} · ${r.timeframe||''} · ${r.direction||''}  E:${r.energy>0?'+':''}${r.energy}`;
+    `${r.symbol||'?'} · ${r.timeframe||''} · ${r.direction||''}  E:${r.energy>0?'+':''}${r.energy}${prixActuel}`;
   document.getElementById('solo-confidence').textContent =
     `Confiance ${r.confidence||0}% · Pivot: ${r.pivot_pos||''}`;
 

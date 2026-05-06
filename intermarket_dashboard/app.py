@@ -1399,55 +1399,58 @@ Si tu ne peux pas identifier un marché clairement, ne l'inclus pas."""
 
 SOLO_PROMPT = """Tu es un expert Belkhayate — analyste de trade précis sur graphique unique.
 
-Analyse ce graphique TradingView avec les indicateurs Belkhayate et donne un signal de trade ACTIONNABLE.
+Analyse ce graphique TradingView et donne un signal ACTIONNABLE MAINTENANT — pas historique.
 
 ÉTAPE 1 — Lis le graphique :
-1. Direction Belkhayate (bande colorée sous les bougies) :
+1. Prix ACTUEL : regarde la DERNIÈRE bougie à droite. C'est le prix maintenant.
+2. Direction Belkhayate (bande colorée sous les bougies dernières) :
    - Verte = BULLISH | Rouge = BEARISH | Absente/grise = NEUTRAL
-
-2. Belkhayate Énergie (histogramme bas) :
-   - Barres grises/blanches = énergie acheteuse → valeur positive (ex: +2.5)
-   - Barres bleues = énergie vendeuse → valeur négative (ex: -1.8)
+3. Énergie Belkhayate (histogramme, DERNIÈRE barre à droite) :
+   - Barres grises/blanches = énergie acheteuse → valeur positive
+   - Barres bleues = énergie vendeuse → valeur négative
    - Estime sur échelle ±5
+4. Pivots Belkhayate (lignes horizontales) :
+   - SI, LA, SOL, FA (central), MI, RE, DO
+   - Note les prix exacts des pivots visibles
 
-3. Pivots Belkhayate (lignes pointillées horizontales) :
-   - SI=rouge (résistance forte), LA=orange, SOL=jaune, FA=gris (pivot central),
-     MI=vert clair, RE=vert, DO=vert foncé (support fort)
-   - Note le niveau exact du pivot le plus proche du prix actuel
-   - Estime les prix exacts de chaque pivot visible
+ÉTAPE 2 — RÈGLE CRITIQUE : Le trade est-il encore possible ?
 
-4. Structure SMC visible : BOS (Break of Structure), CHoCH (Change of Character), Order Blocks
+A) Le mouvement a DÉJÀ eu lieu (prix étendu loin des pivots, grande bougie passée) :
+   → signal = "WAIT", reason = "Trade manqué — mouvement déjà exécuté. Attendre repli."
+   → wait_for = niveau exact de repli vers le pivot support le plus proche
+   → entry/sl/tp1/tp2 = null
 
-ÉTAPE 2 — Signal de trade :
-- BUY : direction BULLISH + énergie positive + prix au-dessus FA ou rebond sur support (MI/RE/DO)
-- SELL : direction BEARISH + énergie négative + prix sous FA ou rejet sur résistance (SOL/LA/SI)
-- WAIT : signal ambigu, énergie faible, prix entre deux pivots sans confirmation
+B) Le prix EST dans la zone d'entrée (au pivot ou retest récent) :
+   → signal = "BUY" ou "SELL"
+   → Entrée = prix actuel ou pivot le plus proche
+   → SL = pivot suivant (risque max 0.5% du prix)
+   → TP1 = prochain pivot (R/R min 1:2)
+   → TP2 = pivot suivant (R/R min 1:3)
 
-ÉTAPE 3 — Niveaux précis :
-- Entrée : prix actuel ou niveau de retest du pivot clé
-- SL : pivot support/résistance immédiat sous/sur le prix (selon le trade)
-- TP1 : prochain pivot (ratio minimum 1:1.5)
-- TP2 : pivot suivant (ratio minimum 1:2.5)
+C) Signal ambigu ou énergie faible :
+   → signal = "WAIT"
+
+RÈGLE R/R : Ne jamais donner un BUY/SELL avec R/R < 1:2. Si le R/R est insuffisant = WAIT.
 
 IMPORTANT : Réponds UNIQUEMENT en JSON valide :
 {
   "symbol": "ES",
-  "timeframe": "1H",
+  "timeframe": "5m",
   "direction": "BULLISH",
   "energy": 2.1,
-  "pivot_pos": "above_FA",
-  "signal": "BUY",
-  "confidence": 82,
-  "entry": 5320.0,
-  "sl": 5290.0,
-  "tp1": 5380.0,
-  "tp2": 5440.0,
-  "rr1": "1:2.0",
-  "rr2": "1:4.0",
-  "reason": "ES au-dessus du pivot FA avec énergie +2.1. BOS haussier confirmé. Régime RISK-ON aligné. ES était en retard sur l'Or et les Obligations qui ont déjà cassé leurs résistances.",
-  "wait_for": ""
-}
-Si signal WAIT : entry/sl/tp1/tp2 = null, wait_for = condition précise à attendre."""
+  "prix_actuel": 7342.0,
+  "pivot_pos": "above_SOL",
+  "signal": "WAIT",
+  "confidence": 75,
+  "entry": null,
+  "sl": null,
+  "tp1": null,
+  "tp2": null,
+  "rr1": null,
+  "rr2": null,
+  "reason": "BOS haussier déjà exécuté — prix passé de 7308 à 7342 (+34 pts). Mouvement trop étendu pour entrer maintenant sans risque excessif.",
+  "wait_for": "Attendre repli vers SOL (7304-7307) ou FA (7280) pour entrer en BUY avec R/R correct"
+}"""
 
 
 def analyze_screenshot_with_vision(image_base64, media_type='image/png'):
