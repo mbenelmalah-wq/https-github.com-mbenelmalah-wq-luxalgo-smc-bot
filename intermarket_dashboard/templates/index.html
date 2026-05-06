@@ -1848,7 +1848,16 @@ function renderSoloResult(r){
   document.getElementById('solo-confidence').textContent =
     `Confiance ${r.confidence||0}% · Pivot: ${r.pivot_pos||''}`;
 
-  if(sig !== 'WAIT' && r.entry){
+  // Infos zone et pivot
+  document.getElementById('solo-sym-tf').textContent =
+    `${r.symbol||'?'} · ${r.timeframe||''} · ${r.direction||''} · ${r.energie||''}`;
+  const zoneEl = document.getElementById('solo-confidence');
+  zoneEl.innerHTML = `Confiance <b>${r.confidence||0}%</b>`
+    + (r.zone ? ` · Zone: <span style="color:var(--gold)">${r.zone}</span>` : '')
+    + (r.prix_actuel ? ` · Prix: ${r.prix_actuel}` : '');
+
+  if(sig !== 'ATTENDRE' && sig !== 'WAIT' && r.entry){
+    // Signal BUY ou SELL : grille niveaux
     document.getElementById('solo-levels-grid').innerHTML = `
       <div style="background:rgba(0,0,0,.4);border-radius:8px;padding:10px;text-align:center">
         <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Entrée</div>
@@ -1871,15 +1880,36 @@ function renderSoloResult(r){
     document.getElementById('solo-rr').textContent =
       `R/R TP1: ${r.rr1||'?'} · R/R TP2: ${r.rr2||'?'}`;
   } else {
-    document.getElementById('solo-levels-grid').innerHTML='';
-    document.getElementById('solo-rr').textContent='';
+    // ATTENDRE : afficher 2 scénarios
+    let scenariosHtml = '';
+    if(r.scenario_pullback){
+      scenariosHtml += `
+        <div style="background:rgba(99,179,237,.08);border:1px solid rgba(99,179,237,.3);
+          border-radius:8px;padding:10px;margin-bottom:6px">
+          <div style="font-size:9px;color:#63b3ed;text-transform:uppercase;
+            letter-spacing:1px;margin-bottom:4px">Scénario A — Repli</div>
+          <div style="font-size:11px;color:var(--txt)">${r.scenario_pullback}</div>
+        </div>`;
+    }
+    if(r.scenario_breakout){
+      scenariosHtml += `
+        <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.25);
+          border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:var(--on);text-transform:uppercase;
+            letter-spacing:1px;margin-bottom:4px">Scénario B — Cassure</div>
+          <div style="font-size:11px;color:var(--txt)">${r.scenario_breakout}</div>
+        </div>`;
+    }
+    document.getElementById('solo-levels-grid').innerHTML = scenariosHtml;
+    document.getElementById('solo-rr').textContent =
+      r.resistance_suivante ? `Résistance suivante: ${r.resistance_label||''} ${r.resistance_suivante}` : '';
   }
 
   document.getElementById('solo-reason').textContent = r.reason||'';
   const wf = document.getElementById('solo-waitfor');
   if(r.wait_for){
     wf.style.display='block';
-    wf.textContent='⏳ Attendre : '+r.wait_for;
+    wf.textContent='⏳ '+r.wait_for;
   } else {
     wf.style.display='none';
   }
